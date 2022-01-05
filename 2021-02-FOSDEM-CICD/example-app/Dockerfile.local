@@ -1,4 +1,4 @@
 ARG WINBASE
 FROM ${WINBASE}
 ENTRYPOINT [ "app.exe" ]
-COPY app.exe app.exe
+COPY out/app.exe app.exe
