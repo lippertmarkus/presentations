@@ -1,0 +1,75 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hello-hybrid-
+  namespace: default
+spec:
+  entrypoint: myentry
+  volumeClaimTemplates:
+    - metadata:
+        name: workdir
+      spec:
+        accessModes: [ "ReadWriteMany" ]
+        storageClassName: azurefile-csi
+        resources:
+          requests:
+            storage: 1Gi
+
+  templates:
+    - name: myentry
+      steps:
+        - - name: build
+            template: build
+        #- - name: test
+        #    template: test
+        - - name: create-image
+            template: create-image
+
+    - name: build
+      inputs:
+        artifacts:
+          - name: code
+            path: /workDir/src
+            git:
+              repo: https://github.com/lippertmarkus/presentations.git
+      nodeSelector:
+        kubernetes.io/os: windows  # step should run on Windows
+      container:
+        image: mcr.microsoft.com/dotnet/sdk:6.0
+        command: ["dotnet"]
+        args: ["publish", "-c", "release", "-o", "out", "-r", "win10-x64", "--self-contained", "true", "/p:PublishTrimmed=true", "/p:PublishReadyToRun=true", "/p:PublishSingleFile=true"]
+        workingDir: /workDir/src/2021-02-FOSDEM-CICD/example-app
+        volumeMounts:
+          - name: workdir
+            mountPath: /workDir
+
+    - name: test
+      nodeSelector:
+        kubernetes.io/os: windows  # step should run on Windows
+      container:
+        image: mcr.microsoft.com/dotnet/sdk:6.0
+        command: ["dotnet"]
+        args: ["test"]
+        workingDir: /workDir/src/2021-02-FOSDEM-CICD/example-app
+        volumeMounts:
+          - name: workdir
+            mountPath: /workDir
+
+    - name: create-image
+      nodeSelector:
+        kubernetes.io/os: linux  # step should run on Linux
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-config
+      container:
+        image: gcr.io/go-containerregistry/crane:debug
+        command: ["sh", "-c"]
+        args: ["tar -cvf app.tar --directory=out dotnet.exe ; 
+          crane mutate --platform windows/amd64 --entrypoint=dotnet.exe --append app.tar mcr.microsoft.com/windows/nanoserver:1809 -t docker.io/lippertmarkus/test:out-argo-crane"]
+        workingDir: /workDir/src/2021-02-FOSDEM-CICD/example-app
+        volumeMounts:
+          - name: workdir
+            mountPath: /workDir
+          - name: docker-config
+            mountPath: /root/.docker

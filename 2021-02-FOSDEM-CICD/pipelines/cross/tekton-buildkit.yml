@@ -1,0 +1,78 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: cross-buildkit
+spec:
+  pipelineSpec:
+    workspaces:
+      - name: workdir
+    tasks:
+      - name: clone
+        workspaces:
+          - name: workdir
+            workspace: workdir
+        taskSpec:
+          workspaces:
+            - name: workdir
+              mountPath: /workdir  # needed because of TODO
+          steps:
+            - name: clone
+              image: bitnami/git:2.34.1
+              command: ["git"]
+              args: ["clone", "https://github.com/lippertmarkus/presentations.git", "/workdir/src"]
+
+      - name: build-test-create-image
+        runAfter: ["clone"]
+        workspaces:
+          - name: workdir
+            workspace: workdir
+        taskSpec:
+          metadata:
+            annotations:
+              container.apparmor.security.beta.kubernetes.io/step-build-test-create-image: unconfined
+          workspaces:
+          - name: workdir
+            mountPath: /workdir  # needed because of TODO
+          steps:
+            - name: build-test-create-image
+              image: moby/buildkit:v0.9.3-rootless
+              command: ["buildctl-daemonless.sh"]
+              args: ["build", "--frontend", "dockerfile.v0", "--local", "context=.", "--local", "dockerfile=.", "--opt", "filename=Dockerfile.cross", "--opt", "platform=windows/amd64",
+                "--output", "type=image,name=docker.io/lippertmarkus/test:cross-tekton-buildkit,push=true"]
+              workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
+              volumeMounts:
+                - name: docker-config
+                  mountPath: /.docker
+              env:
+                - name: BUILDKITD_FLAGS
+                  value: --oci-worker-no-process-sandbox
+                - name: DOCKER_CONFIG
+                  value: /.docker
+              securityContext:
+                seccompProfile:
+                  type: Unconfined
+          
+  workspaces:
+    - name: workdir
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ "ReadWriteMany" ]
+          storageClassName: azurefile-csi
+          resources:
+            requests:
+              storage: 1Gi
+
+  taskRunSpecs:
+    - pipelineTaskName: clone
+      taskPodTemplate:
+        nodeSelector:
+          kubernetes.io/os: linux
+
+    - pipelineTaskName: build-test-create-image
+      taskPodTemplate:
+        nodeSelector:
+          kubernetes.io/os: linux
+        volumes:
+          - name: docker-config
+            secret:
+              secretName: docker-config

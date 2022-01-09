@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: cross-buildkit
+spec:
+  entrypoint: myentry
+
+  templates:
+    - name: myentry
+      steps:
+        - - name: build-test-create-image
+            template: build-test-create-image
+
+    - name: build-test-create-image
+      inputs:
+        artifacts:
+          - name: code
+            path: /src
+            git:
+              repo: https://github.com/lippertmarkus/presentations.git
+      metadata:
+        annotations:
+          container.apparmor.security.beta.kubernetes.io/main: unconfined
+      nodeSelector:
+        kubernetes.io/os: linux  # step runs on Linux
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: docker-config
+      container:
+        image: moby/buildkit:v0.9.3-rootless
+        command: ["buildctl-daemonless.sh"]
+        args: ["build", "--frontend", "dockerfile.v0", "--local", "context=.", "--local", "dockerfile=.", "--opt", "filename=Dockerfile.cross", "--opt", "platform=windows/amd64",
+          "--output", "type=image,name=docker.io/lippertmarkus/test:cross-argo-buildkit,push=true"]
+        workingDir: /src/2021-02-FOSDEM-CICD/example-app
+        volumeMounts:
+          - name: docker-config
+            mountPath: /.docker
+        env:
+          - name: BUILDKITD_FLAGS
+            value: --oci-worker-no-process-sandbox
+          - name: DOCKER_CONFIG
+            value: /.docker
+        securityContext:
+          seccompProfile:
+            type: Unconfined
+        

@@ -1,0 +1,33 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: hello-world
+spec:
+  pipelineSpec:
+    tasks:
+      - name: task-win
+        taskSpec:
+          steps:
+            - name: hello-windows
+              image: mcr.microsoft.com/windows/nanoserver:1809
+              command: ["cmd", "/c"]
+              args: ["echo", "Hello from Windows Container!"]
+      - name: task-lin
+        taskSpec:
+          steps:
+            - name: hello-linux
+              image: alpine
+              command: ["echo"]
+              args: ["Hello from Linux Container!"]    
+  taskRunSpecs:
+    - pipelineTaskName: task-win
+      taskPodTemplate:
+        nodeSelector:
+          kubernetes.io/os: windows  # runs on Windows
+        securityContext:
+          windowsOptions:
+            runAsUserName: "ContainerAdministrator"
+    - pipelineTaskName: task-lin
+      taskPodTemplate:
+        nodeSelector:
+          kubernetes.io/os: linux  # runs on Linux
