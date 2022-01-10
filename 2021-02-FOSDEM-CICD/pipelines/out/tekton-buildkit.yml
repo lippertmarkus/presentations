@@ -1,86 +1,80 @@
 apiVersion: tekton.dev/v1beta1
-kind: Pipeline
-metadata:
-  name: mypipeline
-spec:
-  workspaces:
-    - name: workdir
-  tasks:
-    - name: clone
-      workspaces:
-        - name: workdir
-          workspace: workdir
-      taskSpec:
-        steps:
-          - name: clone
-            image: bitnami/git:2.34.1
-            command: ["git"]
-            args: ["clone", "https://github.com/lippertmarkus/presentations.git", "/workdir/src"]
-        workspaces:
-          - name: workdir
-            mountPath: /workdir  # needed because of TODO
-    
-    - name: build-test
-      runAfter:
-        - clone
-      workspaces:
-        - name: workdir
-          workspace: workdir
-      taskSpec:
-        steps:
-          - name: build
-            image: mcr.microsoft.com/dotnet/sdk:6.0
-            command: ["dotnet"]
-            args: ["publish", "-c", "release", "-o", "out", "-r", "win10-x64", "--self-contained", "true", "/p:PublishTrimmed=true", "/p:PublishReadyToRun=true", "/p:PublishSingleFile=true"]
-            workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
-          - name: test
-            image: mcr.microsoft.com/dotnet/sdk:6.0
-            command: ["dotnet"]
-            args: ["test"]
-            workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
-        workspaces:
-          - name: workdir
-            mountPath: /workdir  # needed because of TODO
-
-    - name: create-image
-      runAfter:
-        - build-test
-      workspaces:
-        - name: workdir
-          workspace: workdir
-      taskSpec:
-        metadata:
-          annotations:
-            container.apparmor.security.beta.kubernetes.io/step-create-image: unconfined
-        steps:
-          - name: create-image
-            image: moby/buildkit:v0.9.3-rootless
-            command: ["buildctl-daemonless.sh"]
-            args: ["build", "--frontend", "dockerfile.v0", "--local", "context=.", "--local", "dockerfile=.", "--opt", "filename=Dockerfile.out", "--opt", "platform=windows/amd64",
-              "--output", "type=image,name=docker.io/lippertmarkus/test:out-tekton-buildkit,push=true"]
-            workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app  
-            env:
-              - name: BUILDKITD_FLAGS
-                value: --oci-worker-no-process-sandbox
-              - name: DOCKER_CONFIG
-                value: /.docker
-            volumeMounts:
-              - name: docker-config
-                mountPath: /.docker
-            securityContext:
-              seccompProfile:
-                type: Unconfined
-        workspaces:
-          - name: workdir
-            mountPath: /workdir  # needed because of TODO
----
-apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
 metadata:
-  name: mypipelinerun
+  name: out-buildkit
 spec:
-  pipelineRef:
-    name: mypipeline
+  pipelineSpec:
+    workspaces:
+      - name: workdir
+    tasks:
+      - name: clone
+        workspaces:
+          - name: workdir
+            workspace: workdir
+        taskSpec:
+          steps:
+            - name: clone
+              image: bitnami/git:2.34.1
+              command: ["git"]
+              args: ["clone", "https://github.com/lippertmarkus/presentations.git", "/workdir/src"]
+          workspaces:
+            - name: workdir
+              mountPath: /workdir  # needed because of TODO
+      
+      - name: build-test
+        runAfter:
+          - clone
+        workspaces:
+          - name: workdir
+            workspace: workdir
+        taskSpec:
+          steps:
+            - name: build
+              image: mcr.microsoft.com/dotnet/sdk:6.0
+              command: ["dotnet"]
+              args: ["publish", "-c", "release", "-o", "out", "-r", "win10-x64", "--self-contained", "true", "/p:PublishTrimmed=true", "/p:PublishReadyToRun=true", "/p:PublishSingleFile=true"]
+              workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
+            - name: test
+              image: mcr.microsoft.com/dotnet/sdk:6.0
+              command: ["dotnet"]
+              args: ["test"]
+              workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
+          workspaces:
+            - name: workdir
+              mountPath: /workdir  # needed because of TODO
+
+      - name: create-image
+        runAfter:
+          - build-test
+        workspaces:
+          - name: workdir
+            workspace: workdir
+        taskSpec:
+          metadata:
+            annotations:
+              container.apparmor.security.beta.kubernetes.io/step-create-image: unconfined
+          steps:
+            - name: create-image
+              image: moby/buildkit:v0.9.3-rootless
+              command: ["buildctl-daemonless.sh"]
+              args: ["build", "--frontend", "dockerfile.v0", "--local", "context=.", "--local", "dockerfile=.", "--opt", "filename=Dockerfile.out", "--opt", "platform=windows/amd64",
+                "--output", "type=image,name=docker.io/lippertmarkus/test:out-tekton-buildkit,push=true"]
+              workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app  
+              env:
+                - name: BUILDKITD_FLAGS
+                  value: --oci-worker-no-process-sandbox
+                - name: DOCKER_CONFIG
+                  value: /.docker
+              volumeMounts:
+                - name: docker-config
+                  mountPath: /.docker
+              securityContext:
+                seccompProfile:
+                  type: Unconfined
+          workspaces:
+            - name: workdir
+              mountPath: /workdir  # needed because of TODO
+
   workspaces:
     - name: workdir
       volumeClaimTemplate:
@@ -96,6 +90,7 @@ spec:
       taskPodTemplate:
         nodeSelector:
           kubernetes.io/os: linux
+
     - pipelineTaskName: build-test
       taskPodTemplate:
         nodeSelector:
@@ -104,6 +99,7 @@ spec:
           # needed because of https://github.com/microsoft/Windows-Containers/issues/167
           windowsOptions:
             runAsUserName: "ContainerAdministrator"
+            
     - pipelineTaskName: create-image
       taskPodTemplate:
         nodeSelector:

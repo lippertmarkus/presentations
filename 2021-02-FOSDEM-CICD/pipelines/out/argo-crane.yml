@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: hello-hybrid-
+  name: out-crane
   namespace: default
 spec:
   entrypoint: myentry
@@ -20,8 +20,8 @@ spec:
       steps:
         - - name: build
             template: build
-        #- - name: test
-        #    template: test
+        - - name: test
+            template: test
         - - name: create-image
             template: create-image
 

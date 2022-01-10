@@ -35,9 +35,9 @@ spec:
         kubernetes.io/os: windows  # step runs on Windows
       container:
         image: mcr.microsoft.com/dotnet/sdk:6.0
-        workingDir: /workDir/src/2021-02-FOSDEM-CICD/example-app
         command: ["dotnet"]
         args: ["publish", "-c", "release", "-o", "out", "-r", "win10-x64", "--self-contained", "true", "/p:PublishTrimmed=true", "/p:PublishReadyToRun=true", "/p:PublishSingleFile=true"]
+        workingDir: /workDir/src/2021-02-FOSDEM-CICD/example-app
         volumeMounts:
           - name: workdir
             mountPath: /workDir
@@ -59,7 +59,7 @@ spec:
         annotations:
           container.apparmor.security.beta.kubernetes.io/main: unconfined
       nodeSelector:
-        kubernetes.io/os: linux  # step should run on Linux
+        kubernetes.io/os: linux  # step runs on Linux
       volumes:
         - name: docker-config
           secret:

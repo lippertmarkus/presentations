@@ -1,75 +1,69 @@
 apiVersion: tekton.dev/v1beta1
-kind: Pipeline
-metadata:
-  name: mypipeline
-spec:
-  workspaces:
-    - name: workdir
-  tasks:
-    - name: clone
-      workspaces:
-        - name: workdir
-          workspace: workdir
-      taskSpec:
-        steps:
-          - name: clone
-            image: bitnami/git:2.34.1
-            command: ["git"]
-            args: ["clone", "https://github.com/lippertmarkus/presentations.git", "/workdir/src"]
-        workspaces:
-          - name: workdir
-            mountPath: /workdir  # needed because of TODO
-    
-    - name: build-test
-      runAfter:
-        - clone
-      workspaces:
-        - name: workdir
-          workspace: workdir
-      taskSpec:
-        steps:
-          - name: build
-            image: mcr.microsoft.com/dotnet/sdk:6.0
-            command: ["dotnet"]
-            args: ["publish", "-c", "release", "-o", "out", "-r", "win10-x64", "--self-contained", "true", "/p:PublishTrimmed=true", "/p:PublishReadyToRun=true", "/p:PublishSingleFile=true"]
-            workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
-          - name: test
-            image: mcr.microsoft.com/dotnet/sdk:6.0
-            command: ["dotnet"]
-            args: ["test"]
-            workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
-        workspaces:
-          - name: workdir
-            mountPath: /workdir  # needed because of TODO
-
-    - name: create-image
-      runAfter:
-        - build-test
-      workspaces:
-        - name: workdir
-          workspace: workdir
-      taskSpec:
-        steps:
-          - name: create-image
-            image: gcr.io/go-containerregistry/crane:debug
-            command: ["sh", "-c"]
-            args: ["tar -cvf app.tar --directory=out dotnet.exe ; 
-              crane mutate --platform windows/amd64 --entrypoint=dotnet.exe --append app.tar mcr.microsoft.com/windows/nanoserver:1809 -t docker.io/lippertmarkus/test:out-tekton-crane"]
-            workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app  
-            volumeMounts:
-              - name: docker-config
-                mountPath: /root/.docker  # needed because of TODO
-        workspaces:
-          - name: workdir
-            mountPath: /workdir
----
-apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
 metadata:
-  name: mypipelinerun
+  name: out-crane
 spec:
-  pipelineRef:
-    name: mypipeline
+  pipelineSpec:
+    workspaces:
+      - name: workdir
+    tasks:
+      - name: clone
+        workspaces:
+          - name: workdir
+            workspace: workdir
+        taskSpec:
+          steps:
+            - name: clone
+              image: bitnami/git:2.34.1
+              command: ["git"]
+              args: ["clone", "https://github.com/lippertmarkus/presentations.git", "/workdir/src"]
+          workspaces:
+            - name: workdir
+              mountPath: /workdir  # needed because of TODO
+      
+      - name: build-test
+        runAfter:
+          - clone
+        workspaces:
+          - name: workdir
+            workspace: workdir
+        taskSpec:
+          steps:
+            - name: build
+              image: mcr.microsoft.com/dotnet/sdk:6.0
+              command: ["dotnet"]
+              args: ["publish", "-c", "release", "-o", "out", "-r", "win10-x64", "--self-contained", "true", "/p:PublishTrimmed=true", "/p:PublishReadyToRun=true", "/p:PublishSingleFile=true"]
+              workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
+            - name: test
+              image: mcr.microsoft.com/dotnet/sdk:6.0
+              command: ["dotnet"]
+              args: ["test"]
+              workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
+          workspaces:
+            - name: workdir
+              mountPath: /workdir  # needed because of TODO
+
+      - name: create-image
+        runAfter:
+          - build-test
+        workspaces:
+          - name: workdir
+            workspace: workdir
+        taskSpec:
+          steps:
+            - name: create-image
+              image: gcr.io/go-containerregistry/crane:debug
+              command: ["sh", "-c"]
+              args: ["tar -cvf app.tar --directory=out dotnet.exe ; 
+                crane mutate --platform windows/amd64 --entrypoint=dotnet.exe --append app.tar mcr.microsoft.com/windows/nanoserver:1809 -t docker.io/lippertmarkus/test:out-tekton-crane"]
+              workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app  
+              volumeMounts:
+                - name: docker-config
+                  mountPath: /root/.docker  # needed because of TODO
+          workspaces:
+            - name: workdir
+              mountPath: /workdir
+
   workspaces:
     - name: workdir # this workspace name must be declared in the Pipeline
       volumeClaimTemplate:
@@ -79,11 +73,13 @@ spec:
           resources:
             requests:
               storage: 1Gi
+
   taskRunSpecs:
     - pipelineTaskName: clone
       taskPodTemplate:
         nodeSelector:
           kubernetes.io/os: linux
+
     - pipelineTaskName: build-test
       taskPodTemplate:
         nodeSelector:
@@ -92,6 +88,7 @@ spec:
           # needed because of https://github.com/microsoft/Windows-Containers/issues/167
           windowsOptions:
             runAsUserName: "ContainerAdministrator"
+            
     - pipelineTaskName: create-image
       taskPodTemplate:
         nodeSelector:
