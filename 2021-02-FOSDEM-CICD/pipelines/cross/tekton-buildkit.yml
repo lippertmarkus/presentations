@@ -48,6 +48,8 @@ spec:
                   value: --oci-worker-no-process-sandbox
                 - name: DOCKER_CONFIG
                   value: /.docker
+                - name: BUILDCTL_CONNECT_RETRIES_MAX
+                  value: "20"
               securityContext:
                 seccompProfile:
                   type: Unconfined

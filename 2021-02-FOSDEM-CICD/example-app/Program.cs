@@ -1,3 +1,3 @@
 using System;
 
-Console.WriteLine("Hello .NET!");
+Console.WriteLine("Hello World!");
