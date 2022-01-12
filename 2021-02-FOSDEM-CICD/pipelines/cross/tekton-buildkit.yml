@@ -14,7 +14,7 @@ spec:
         taskSpec:
           workspaces:
             - name: workdir
-              mountPath: /workdir  # needed because of TODO
+              mountPath: /workdir  # needed because of https://github.com/tektoncd/pipeline/issues/4473
           steps:
             - name: clone
               image: bitnami/git:2.34.1
@@ -32,7 +32,7 @@ spec:
               container.apparmor.security.beta.kubernetes.io/step-build-test-create-image: unconfined
           workspaces:
           - name: workdir
-            mountPath: /workdir  # needed because of TODO
+            mountPath: /workdir  # needed because of https://github.com/tektoncd/pipeline/issues/4473
           steps:
             - name: build-test-create-image
               image: moby/buildkit:v0.9.3-rootless

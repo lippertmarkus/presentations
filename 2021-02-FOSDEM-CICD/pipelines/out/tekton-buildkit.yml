@@ -19,7 +19,7 @@ spec:
               args: ["clone", "https://github.com/lippertmarkus/presentations.git", "/workdir/src"]
           workspaces:
             - name: workdir
-              mountPath: /workdir  # needed because of TODO
+              mountPath: /workdir  # needed because of https://github.com/tektoncd/pipeline/issues/4473
       
       - name: build-test
         runAfter:
@@ -41,7 +41,7 @@ spec:
               workingDir: /workdir/src/2021-02-FOSDEM-CICD/example-app
           workspaces:
             - name: workdir
-              mountPath: /workdir  # needed because of TODO
+              mountPath: /workdir  # needed because of https://github.com/tektoncd/pipeline/issues/4473
 
       - name: create-image
         runAfter:
@@ -75,7 +75,7 @@ spec:
                   type: Unconfined
           workspaces:
             - name: workdir
-              mountPath: /workdir  # needed because of TODO
+              mountPath: /workdir  # needed because of https://github.com/tektoncd/pipeline/issues/4473
 
   workspaces:
     - name: workdir
